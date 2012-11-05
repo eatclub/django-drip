@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.conf import settings
 
 # just using this to parse, but totally insane package naming...
 # https://bitbucket.org/schinckel/django-timedelta-field/
@@ -21,8 +22,12 @@ class Drip(models.Model):
     enabled = models.BooleanField(default=False)
 
     subject_template = models.TextField(null=True, blank=True)
-    body_html_template = models.TextField(null=True, blank=True,
-        help_text='You will have settings and user in the context.')
+    if getattr(settings, 'DRIP_USE_CREATESEND', False):        
+        body_html_template = models.TextField(null=True, blank=True,
+                                              help_text='You may use createsend custom fields in the body')
+    else:
+        body_html_template = models.TextField(null=True, blank=True,
+                                              help_text='You will have settings and user in the context.')
 
     @property
     def drip(self):

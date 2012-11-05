@@ -106,11 +106,15 @@ class DripBase(object):
         """
         Creates Email instance and optionally sends to user.
         """
+        use_createsend = getattr(settings, 'DRIP_USE_CREATESEND', False)
+
         from django.utils.html import strip_tags
 
         from_email = getattr(settings, 'DRIP_FROM_EMAIL', settings.EMAIL_HOST_USER)
-
-        context = Context({'user': user})
+        if use_createsend:
+            context = Context({'user': user})
+        else:
+            context = Context()
         subject = Template(self.subject_template).render(context)
         body = Template(self.body_template).render(context)
         plain = strip_tags(body)
@@ -121,32 +125,116 @@ class DripBase(object):
         if len(plain) != len(body):
             email.attach_alternative(body, 'text/html')
 
-        if send:
+        if send and not use_createsend:
             sd = SentDrip.objects.create(
                 drip=self.drip_model,
                 user=user,
                 subject=subject,
                 body=body
             )
-            email.send()
+            #email.send()
 
         return email
 
     def send(self):
-        """
-        Send the email to each user on the queryset.
+        if getattr(settings, 'DRIP_USE_CREATESEND', False):
+            template_name = 'Drip Template'
+            segment_name = 'Drip Segment %s' % self.drip_model.name
+            from createsend import Campaign, Segment,  CreateSend, BadRequest, Client
 
-        Add that user to the SentDrip.
+            CreateSend.api_key = settings.CREATESEND_API
 
-        Returns a list of created SentDrips.
-        """
+            client = Client(settings.CREATESEND_CLIENT_ID)
 
-        count = 0
-        for user in self.get_queryset():
-            msg = self.build_email(user, send=True)
-            count += 1
+            template_id = None
+            for template in client.templates():
+                if template.Name == template_name:
+                    template_id = template.TemplateID
 
-        return count
+            if template_id is None:
+                raise Exception("Template with the name '%s' does not exist" % template_name)
+
+            segment_id = None
+            for segment in client.segments():
+                if segment.Title == segment_name:
+                    segment_id = segment.SegmentID
+
+            rules = []
+            count = 0
+
+            qs = self.get_queryset()
+            for user in qs:
+                rules.append({
+                        'Subject' : 'EmailAddress',
+                        'Clauses' : ['EQUALS %s' % user.email]})
+                count += 1
+
+            if count:
+                if segment_id is None:
+                    segment = Segment().create(settings.CREATESEND_LIST_ID, segment_name, rules)
+                else:
+                    segment = Segment(segment_id)
+                    segment.update(segment_name, rules)
+
+                subject = Template(self.subject_template).render(Context())
+                body = Template(self.body_template).render(Context())
+                name    = 'Drip Campaign %s %s' % (self.drip_model.name, datetime.now().isoformat())
+
+                from_address = getattr(settings, 'DRIP_FROM_EMAIL', settings.EMAIL_HOST_USER)
+
+                template_content = {
+                    "Multilines" : [{
+                        'Content': body,
+                        },],
+                    }
+
+
+                campaign = Campaign().create_from_template(settings.CREATESEND_CLIENT_ID, 
+                                                           subject, 
+                                                           name, 
+                                                           from_address, 
+                                                           from_address, 
+                                                           from_address, 
+                                                           [], 
+                                                           [segment.details().SegmentID], 
+                                                           template_id, 
+                                                           template_content,
+                                                           )
+                failed = False
+                try:
+                    campaign.send(settings.CREATESEND_CONFIRMATION_EMAIL)
+                except BadRequest as br:
+                    print "ERROR: Could not send Drip %s: %s" % (self.drip_model.name, br)
+                    failed = True
+                
+                if not failed:
+                    for user in qs:
+                        sd = SentDrip.objects.create(
+                            drip=self.drip_model,
+                            user=user,
+                            subject=subject,
+                            body=body
+                            )
+
+            return count
+
+            
+
+        else:
+            """
+            Send the email to each user on the queryset.
+
+            Add that user to the SentDrip.
+
+            Returns a list of created SentDrips.
+            """
+
+            count = 0
+            for user in self.get_queryset():
+                msg = self.build_email(user, send=True)
+                count += 1
+
+            return count
 
 
     ####################

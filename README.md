@@ -49,11 +49,15 @@ python manage.py migrate drip
 
 ### Createsend:
 To use createsend to send the campaigns, add the following to your settings.py:
+
+```
 DRIP_USE_CREATESEND=True
 CREATESEND_API = 'ffffffffffffffffffffffffffffffff'
 CREATESEND_LIST_ID = 'ffffffffffffffffffffffffffffffff'
 CREATESEND_CLIENT_ID = 'ffffffffffffffffffffffffffffffff'
 CREATESEND_CONFIRMATION_EMAIL = 'confirmations@example.com'
+```
 
 You will also need a template named 'Drip Template'.  The Content will get filled in with the drip body.
+
 *Note that you can't use user attributes in the context*

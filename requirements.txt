@@ -1,6 +1,7 @@
 # production
 Django>=1.3
 django-timedeltafield==0.6.7
+createsend>=2.3.0
 
 # development
 Sphinx==1.1.3

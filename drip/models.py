@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from django.db.models import Count, Min, Max, Sum, Avg
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -74,28 +75,66 @@ LOOKUP_TYPES = (
     ('lt', 'lesser than'),
     ('lte', 'lesser than or equal to'),
     ('startswith', 'starts with'),
-    ('endswith', 'starts with'),
-    ('istartswith', 'ends with (case insensitive)'),
+    ('istartswith', 'starts with (case insensitive)'),
+    ('endswith', 'ends with'),
     ('iendswith', 'ends with (case insensitive)'),
+    ('isnull','is NULL'),
 )
 
-class QuerySetRule(models.Model):
+ANNOTATE_TYPES = (
+    ('none', 'None'),
+    ('sum','Sum'),
+    ('count','Count'),
+    ('min','Min'),
+    ('max', 'Max'),
+    ('avg', 'Average'),
+    )
+
+
+class BaseRule(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     lastchanged = models.DateTimeField(auto_now=True)
 
-    drip = models.ForeignKey(Drip, related_name='queryset_rules')
+    drip = models.ForeignKey(Drip)
 
     method_type = models.CharField(max_length=12, default='filter', choices=METHOD_TYPES)
     field_name = models.CharField(max_length=128, verbose_name='Field name off User')
+    annotate   = models.CharField(max_length=32, choices=ANNOTATE_TYPES, default='none')
     lookup_type = models.CharField(max_length=12, default='exact', choices=LOOKUP_TYPES)
 
-    # would be nice if we could do a Count() object or something
     field_value = models.CharField(max_length=255,
         help_text=('Can be anything from a number, to a string. Or, do ' +
                    '`now-7 days` or `now+3 days` for fancy timedelta.'))
 
     def apply(self, qs, now=datetime.now):
-        field_name = '__'.join([self.field_name, self.lookup_type])
+        if self.annotate != 'none':
+            field_name = "%s__annotate%s" % (self.field_name, self.id)
+            if self.annotate == 'sum':
+                _kwargs = {
+                    field_name: Sum(self.field_name)
+                    }
+            elif self.annotate == 'count':
+                _kwargs = {
+                    field_name: Count(self.field_name)
+                    }
+            elif self.annotate == 'min':
+                _kwargs = {
+                    field_name: Min(self.field_name)
+                    }
+            elif self.annotate == 'max':
+                _kwargs = {
+                    field_name: Max(self.field_name)
+                    }
+            elif self.annotate == 'avg':
+                _kwargs = {
+                    field_name: Avg(self.field_name)
+                    }
+            qs = qs.annotate(**_kwargs)
+        else:
+            field_name = self.field_name
+
+
+        field_name = '__'.join([field_name, self.lookup_type])
         field_value = self.field_value
 
         # set time deltas and dates
@@ -123,3 +162,17 @@ class QuerySetRule(models.Model):
 
         # catch as default
         return qs.filter(**kwargs)
+
+class QuerySetRule(BaseRule):
+    pass
+    
+
+class SubqueryRule(BaseRule):
+    app_name   = models.CharField(max_length=64, verbose_name='App where the model is stored')
+    model_name = models.CharField(max_length=64, verbose_name='Model to subquery')
+    user_field = models.CharField(max_length=128, verbose_name='Field name which is a foreign key to User', default='user')
+
+class ExcludeSubqueryRule(BaseRule):
+    app_name   = models.CharField(max_length=64, verbose_name='App where the model is stored')
+    model_name = models.CharField(max_length=64, verbose_name='Model to subquery')
+    user_field = models.CharField(max_length=128, verbose_name='Field name which is a foreign key to User', default='user')

@@ -4,16 +4,22 @@ import json
 from django.contrib import admin
 from django.contrib.auth.models import User
 
-from drip.models import Drip, SentDrip, QuerySetRule
+from drip.models import Drip, SentDrip, QuerySetRule, SubqueryRule, ExcludeSubqueryRule
 
 
 class QuerySetRuleInline(admin.TabularInline):
     model = QuerySetRule
+class SubqueryRuleInline(admin.TabularInline):
+    model = SubqueryRule
+class ExcludeSubqueryRuleInline(admin.TabularInline):
+    model = ExcludeSubqueryRule
 
 class DripAdmin(admin.ModelAdmin):
     list_display = ('name', 'enabled')
     inlines = [
         QuerySetRuleInline,
+        SubqueryRuleInline,
+        ExcludeSubqueryRuleInline,
     ]
 
     av = lambda self, view: self.admin_site.admin_view(view)
@@ -47,11 +53,13 @@ class DripAdmin(admin.ModelAdmin):
 
         return HttpResponse(html)
 
-    def change_view(self, request, object_id, extra_context=None):
-        from drip.utils import get_fields, get_simple_fields
-        extra_context = extra_context or {}
-        extra_context['field_data'] = json.dumps(get_simple_fields(User))
-        return super(DripAdmin, self).change_view(request, object_id, extra_context=extra_context)
+    #Disabling this feature; if there are too many fields the page is unresponsive.
+    #Also, it doesn't work for subqueries
+    # def change_view(self, request, object_id, extra_context=None):
+    #     from drip.utils import get_fields, get_simple_fields
+    #     extra_context = extra_context or {}
+    #     extra_context['field_data'] = json.dumps(get_simple_fields(User))
+    #     return super(DripAdmin, self).change_view(request, object_id, extra_context=extra_context)
 
     def get_urls(self):
         from django.conf.urls.defaults import patterns, url

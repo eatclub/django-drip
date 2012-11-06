@@ -3,8 +3,10 @@ from datetime import datetime
 
 from django.contrib.auth.models import User
 from django.template import Context, Template
-from drip.models import SentDrip
+from drip.models import SentDrip, QuerySetRule, SubqueryRule, ExcludeSubqueryRule
 from django.core.mail import EmailMultiAlternatives
+from django.db.models.loading import get_model
+
 
 
 class DripBase(object):
@@ -64,8 +66,36 @@ class DripBase(object):
         return walked_range
 
     def apply_queryset_rules(self, qs):
-        for queryset_rule in self.drip_model.queryset_rules.all():
+        for queryset_rule in QuerySetRule.objects.filter(drip=self.drip_model):
             qs = queryset_rule.apply(qs, now=self.now)
+
+        for app_model_name in SubqueryRule.objects.filter(drip=self.drip_model).values('model_name', 'app_name', 'user_field').distinct():
+            model=get_model(app_model_name['app_name'], app_model_name['model_name'])
+            
+            model_qs = model.objects.values_list(app_model_name['user_field'], flat=True).distinct()
+            for subquery_rule in SubqueryRule.objects.filter(drip=self.drip_model)\
+                                                     .filter(app_name=app_model_name['app_name'])\
+                                                     .filter(model_name=app_model_name['model_name'])\
+                                                     .filter(user_field=app_model_name['user_field']):
+                model_qs = subquery_rule.apply(model_qs, now=self.now)
+
+            user_ids = model_qs
+            qs = qs.filter(id__in=list(user_ids))
+
+        for app_model_name in ExcludeSubqueryRule.objects.filter(drip=self.drip_model).values('model_name', 'app_name', 'user_field').distinct():
+            model=get_model(app_model_name['app_name'], app_model_name['model_name'])
+            
+            model_qs = model.objects.values_list(app_model_name['user_field'], flat=True).distinct()
+            for exclude_subquery_rule in ExcludeSubqueryRule.objects\
+                                                            .filter(drip=self.drip_model)\
+                                                            .filter(app_name=app_model_name['app_name'])\
+                                                            .filter(model_name=app_model_name['model_name'])\
+                                                            .filter(user_field=app_model_name['user_field']):
+                model_qs = exclude_subquery_rule.apply(model_qs, now=self.now)
+
+            user_ids = model_qs
+            qs = qs.exclude(id__in=list(user_ids))
+            
         return qs
 
     ##################
@@ -139,7 +169,7 @@ class DripBase(object):
     def send(self):
         if getattr(settings, 'DRIP_USE_CREATESEND', False):
             template_name = 'Drip Template'
-            segment_name = 'Drip Segment %s' % self.drip_model.name
+            segment_name = 'Drip Segment %s' % self.drip_model.name.replace("'",'').replace('"','')
             from createsend import Campaign, Segment,  CreateSend, BadRequest, Client
 
             CreateSend.api_key = settings.CREATESEND_API
@@ -163,18 +193,25 @@ class DripBase(object):
             count = 0
 
             qs = self.get_queryset()
+            clauses = []
+
             for user in qs:
-                rules.append({
-                        'Subject' : 'EmailAddress',
-                        'Clauses' : ['EQUALS %s' % user.email]})
+                clauses.append("EQUALS %s" % user.email)
                 count += 1
+            rules = [{
+                    
+                    'Subject' : 'EmailAddress',
+                    'Clauses' : clauses,
+                    }]
+
 
             if count:
-                if segment_id is None:
-                    segment = Segment().create(settings.CREATESEND_LIST_ID, segment_name, rules)
-                else:
+                if segment_id is not None:
                     segment = Segment(segment_id)
+                    segment.clear_rules()
                     segment.update(segment_name, rules)
+                else:
+                    segment = Segment().create(settings.CREATESEND_LIST_ID, segment_name, rules)
 
                 subject = Template(self.subject_template).render(Context())
                 body = Template(self.body_template).render(Context())

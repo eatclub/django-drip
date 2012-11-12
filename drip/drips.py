@@ -226,17 +226,18 @@ class DripBase(object):
                     }
 
 
-                campaign = Campaign().create_from_template(settings.CREATESEND_CLIENT_ID, 
-                                                           subject, 
-                                                           name, 
-                                                           from_address, 
-                                                           from_address, 
-                                                           from_address, 
-                                                           [], 
-                                                           [segment.details().SegmentID], 
-                                                           template_id, 
-                                                           template_content,
-                                                           )
+                campaign_id = Campaign().create_from_template(settings.CREATESEND_CLIENT_ID, 
+                                                              subject, 
+                                                              name, 
+                                                              from_address, 
+                                                              from_address, 
+                                                              from_address, 
+                                                              [], 
+                                                              [segment.details().SegmentID], 
+                                                              template_id, 
+                                                              template_content,
+                                                              )
+                campaign = Campaign(campaign_id)
                 failed = False
                 try:
                     campaign.send(settings.CREATESEND_CONFIRMATION_EMAIL)

@@ -211,7 +211,8 @@ class DripBase(object):
                     segment.clear_rules()
                     segment.update(segment_name, rules)
                 else:
-                    segment = Segment().create(settings.CREATESEND_LIST_ID, segment_name, rules)
+                    segment_id = Segment().create(settings.CREATESEND_LIST_ID, segment_name, rules)
+                    segment = Sedment(segment_id)
 
                 subject = Template(self.subject_template).render(Context())
                 body = Template(self.body_template).render(Context())

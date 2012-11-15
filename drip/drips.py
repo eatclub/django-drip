@@ -96,7 +96,7 @@ class DripBase(object):
             user_ids = model_qs
             qs = qs.exclude(id__in=list(user_ids))
             
-        return qs
+        return qs.distinct()
 
     ##################
     ### MANAGEMENT ###

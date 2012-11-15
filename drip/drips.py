@@ -186,7 +186,7 @@ class DripBase(object):
 
             segment_id = None
             for segment in client.segments():
-                if segment.Title == segment_name:
+                if segment.Title == segment_name and segment.ListID == settings.CREATESEND_LIST_ID:
                     segment_id = segment.SegmentID
 
             rules = []

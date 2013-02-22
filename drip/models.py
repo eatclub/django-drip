@@ -26,9 +26,20 @@ class Drip(models.Model):
     if getattr(settings, 'DRIP_USE_CREATESEND', False):        
         body_html_template = models.TextField(null=True, blank=True,
                                               help_text='You may use createsend custom fields in the body')
+        template_name = models.CharField(max_length=255,
+                                         default='Drip Template',
+                                         verbose_name='CreateSend Template Name',
+                                         help_text='There must be a template with this name in CreateSend.')
     else:
         body_html_template = models.TextField(null=True, blank=True,
                                               help_text='You will have settings and user in the context.')
+        template_name = models.CharField(max_length=255,
+                                         blank=True,
+                                         editable=False,
+                                         default='Drip Template',
+                                         verbose_name='CreateSend Template Name',
+                                         help_text='This is not used unless using createsend.')
+
 
     @property
     def drip(self):

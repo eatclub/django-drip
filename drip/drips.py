@@ -162,13 +162,16 @@ class DripBase(object):
                 subject=subject,
                 body=body
             )
+            #This is commented out for safety. I don't want to ever send email via smtp
+            #in our setup.
             #email.send()
 
         return email
 
     def send(self):
         if getattr(settings, 'DRIP_USE_CREATESEND', False):
-            template_name = 'Drip Template'
+
+            template_name = self.drip_model.template_name
             segment_name = 'Drip Segment %s' % self.drip_model.name.replace("'",'').replace('"','')
             from createsend import Campaign, Segment,  CreateSend, BadRequest, Client
 
@@ -212,7 +215,7 @@ class DripBase(object):
                     segment.update(segment_name, rules)
                 else:
                     segment_id = Segment().create(settings.CREATESEND_LIST_ID, segment_name, rules)
-                    segment = Sedment(segment_id)
+                    segment = Segment(segment_id)
 
                 subject = Template(self.subject_template).render(Context())
                 body = Template(self.body_template).render(Context())

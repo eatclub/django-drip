@@ -90,6 +90,9 @@ LOOKUP_TYPES = (
     ('endswith', 'ends with'),
     ('iendswith', 'ends with (case insensitive)'),
     ('isnull','is NULL'),
+    ('week_day', 'Week Day'),
+    ('regex', 'Regex'),
+    ('iregex', 'Regex (case insensitive'),
 )
 
 ANNOTATE_TYPES = (
